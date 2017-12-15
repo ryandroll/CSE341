@@ -79,7 +79,7 @@ fun remove_card (cs : card list, c : card, e : exn) : card list =
   case cs
    of [] => raise e
     | x :: xs' => if x = c then xs'
-                 else remove_card (xs', c, e)
+                 else x :: remove_card (xs', c, e)
 
 fun all_same_color (cs : card list) : bool =
   case cs
@@ -89,20 +89,114 @@ fun all_same_color (cs : card list) : bool =
                         all_same_color (x2 ::xs')
 
 fun sum_cards (cs : card list) : int =
-  let
-      fun tail_helper (cs, sum_val) =
-        case cs
-         of [] => sum_val
-          | x :: xs' => tail_helper (xs', (card_value x) + sum_val)
-  in
-      tail_helper(cs, 0)
-  end
+  foldl (fn (a, b) => a + b) 0 (map (fn x => card_value x) cs)
 
 fun score (cs : card list, goal : int) : int =
-  let val sum = sum_cards cs
+  let
+      val sum = sum_cards cs
       val prelim_score = if sum > goal then 3 * (sum-goal)
-                         else goal-sum
+                         else goal - sum
   in
       if all_same_color cs then prelim_score div 2
       else prelim_score
+  end
+
+fun officiate (cl : card list, ml : move list, goal) =
+  let
+      fun tail_helper (cl : card list , hl : card list , ml : move list) =
+        case ml
+         of [] => hl
+          | Discard m :: ms' => tail_helper(cl, remove_card(hl, m, IllegalMove), ms')
+          | Draw :: ms' =>
+            case cl of
+                [] => hl
+              | c :: cs' =>
+                if  sum_cards (c :: hl) > goal then c :: hl
+                else tail_helper (cs', c :: hl , ms')
+  in
+      score (tail_helper(cl, [], ml), goal)
+  end
+
+fun score_challenge (cs : card list, goal : int) : int =
+  let
+      val ace_count = length(List.filter (fn (su, ra) => ra = Ace) cs)
+      val sum = sum_cards cs
+      fun prelim_score sum =
+        if sum > goal then 3 * (sum-goal)
+        else goal - sum
+      fun alt_score ace_count =
+        case ace_count
+         of 0 => []
+          | i => prelim_score(sum - 10 * i) :: alt_score(i - 1)
+      val min_prelim_score = foldl (fn (a, b) => if a < b then a else b)
+                                   (prelim_score sum)
+                                   (alt_score ace_count)
+  in
+      if all_same_color cs then min_prelim_score div 2
+      else min_prelim_score
+  end
+
+fun officiate_challenge (cl: card list, ml: move list, goal: int) =
+  let
+      fun min_card_value (c : card) : int  =
+        case c
+         of (_, Ace) => 1
+          | (_, Num x) => x
+          | (_, _) => 10
+      fun min_sum_cards (cl : card list) : int =
+        foldl (fn (a, b) => a + b) 0 (map (fn x => min_card_value x) cl)
+      fun tail_helper (cl: card list, hl: card list, ml: move list) =
+        case ml of
+            [] => hl
+          | Discard m :: ms' => tail_helper(cl, remove_card(hl, m, IllegalMove), ms')
+          | Draw :: ms' =>
+            case cl of
+                [] => hl
+              | c :: cs' =>
+                if  min_sum_cards (c :: hl) > goal then c :: hl
+                else tail_helper (cs', c :: hl , ms')
+  in
+      score_challenge(tail_helper(cl, [], ml), goal)
+  end
+
+fun careful_player (cl : card list, goal : int) : move list =
+  (*Method: remove the largest value card*)
+  let
+      fun add_card_sort (cl : card list, c : card) : card list =
+        case cl
+         of [] => [c]
+          | x :: xs' => if card_value c >= card_value x then c :: x :: xs'
+                       else x :: add_card_sort (xs', c)
+
+      fun card_finder (cl : card list, v : int) =
+        case cl
+         of [] => NONE
+          | x :: xs' => if card_value x = v then SOME x
+                       else card_finder (xs', v)
+
+      fun tail_helper (status : {cl : card list, hl : card list, ml : move list}) =
+        case status
+         of {cl = [], hl, ml} => ml
+          | {cl = c :: cs', hl = [], ml} =>
+            if goal > card_value c
+            then tail_helper {cl = cs', hl = [c], ml = ml @ [Draw]}
+            else if goal = card_value c then ml @ [Draw]
+            else ml
+          | {cl = c :: cs', hl = h :: hs', ml} =>
+            let
+                val goal_diff = goal - (sum_cards (h :: hs'))
+            in
+                if goal_diff > card_value c
+                then tail_helper {cl = cs', hl = add_card_sort (h :: hs', c),
+                                  ml = ml @ [Draw]}
+                else if goal_diff = card_value c then ml @ [Draw]
+                else if goal_diff + card_value h >= card_value c
+                then case card_finder (h :: hs', (card_value c) - goal_diff)
+                      of NONE => tail_helper {cl = c :: cs', hl = hs',
+                                             ml = ml @ [Discard h]}
+                       | SOME a => ml @ [Discard a, Draw]
+                else ml
+            end
+  in
+      tail_helper {cl = cl, hl = [], ml = []}
   end
