@@ -89,7 +89,7 @@ fun all_answers (checker : 'a -> 'b list option)
   in
       aux (lst, [])
   end
-
+      
 fun same_string (s1 : string, s2 : string) =
     s1 = s2
 
@@ -102,7 +102,7 @@ val count_wild_and_variable_lengths : pattern -> int  =
 fun count_some_var (var : string, pat : pattern) : int =
     g (fn () => 0) (fn x => if same_string (x, var) then 1 else 0) pat
 
-fun check_pat (pat : pattern) =
+val check_pat : pattern -> bool =
     let
         fun lst p =
 	        case p
@@ -116,7 +116,7 @@ fun check_pat (pat : pattern) =
               | x :: xs' => (List.all (fn a => not (a = x)) xs')
                            andalso (checker xs')      
     in
-        (checker o lst) pat
+        checker o lst
     end
 
 fun match (v: valu, p : pattern) : (string * valu) list option =
@@ -125,8 +125,7 @@ fun match (v: valu, p : pattern) : (string * valu) list option =
         (all_answers match (ListPair.zipEq (vs, ps))
          handle UnequalLengths => NONE)
       | (Constructor(s2,v), ConstructorP (s1,p)) =>
-        if s1 = s2 then match (v, p)
-        else NONE                
+        if s1 = s2 then match (v, p) else NONE                
       | (Const n1, ConstP n2) =>  if n1 = n2 then SOME [] else NONE
       | (Unit, UnitP) => SOME []
       | (_, Wildcard) => SOME []
@@ -141,35 +140,33 @@ exception NoMatch
               
 fun typecheck_patterns_e (tylst, plst) =
     let 
-        fun ptoty (tylst, p) =
+        fun constoty (tlyst, ConstructorP(s1, p1)) =
+            case tylst
+             of (s, v, ty) :: xs' =>
+                if s = s1 andalso ty = constoty (tylst, p1)
+                then Datatype v
+                else constoty (xs', ConstructorP(s1, p1))
+              | [] => raise NoMatch
+        fun ptoty p =
             case p
              of Wildcard => Anything
               | Variable s => Anything
               | UnitP => UnitT
               | ConstP n1 => IntT
-              | TupleP pst => TupleT (map (fn x => ptoty (tylst, x)) pst)
-              | ConstructorP(s1, p1) =>
-                (case tylst
-                  of (s, v, ty) :: xs' =>
-                     if s = s1 andalso ty = ptoty (tylst, p1)
-                     then Datatype v
-                     else ptoty (xs', p)
-                   | [] => raise NoMatch)            
+              | TupleP pst => TupleT (map ptoty pst)
+              | ConstructorP(s1, p1) => constoty (tylst, ConstructorP(s1, p1))
         fun tyfold (ty1, ty2) =
             case (ty1, ty2)
              of (TupleT tlst1, TupleT tlst2) =>
-                TupleT ((map tyfold (ListPair.zipEq (tlst1, tlst2)))
-                        handle UnequalLengths => raise NoMatch)
-             | (Anything, ty2) => ty2
-             | (ty1, Anything) => ty1
-             | (ty1, ty2) => if ty1 = ty2 then ty1
-                            else raise NoMatch
+                 TupleT ((map tyfold (ListPair.zipEq (tlst1, tlst2)))
+                         handle UnequalLengths => raise NoMatch)
+              | (Anything, ty2) => ty2
+              | (ty1, Anything) => ty1
+              | (ty1, ty2) => if ty1 = ty2 then ty1 else raise NoMatch
     in
         case plst
          of [] => raise NoMatch
-          | x :: xs' => List.foldl tyfold
-                                  (ptoty (tylst, x))
-                                  (map (fn x => ptoty (tylst, x)) xs')
+          | xs => List.foldl tyfold Anything (map ptoty xs)
     end
 
 fun typecheck_patterns (tylst, plst) =
