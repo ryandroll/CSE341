@@ -94,10 +94,10 @@ fun same_string (s1 : string, s2 : string) =
     s1 = s2
 
 val count_wildcards : pattern -> int =
-    g (fn () => 1) (fn x => 0)
+    g (fn () => 1) (fn _ => 0)
 
 val count_wild_and_variable_lengths : pattern -> int  =
-    g (fn () => 1) (fn x => String.size x)
+    g (fn () => 1) String.size
       
 fun count_some_var (var : string, pat : pattern) : int =
     g (fn () => 0) (fn x => if same_string (x, var) then 1 else 0) pat
@@ -137,7 +137,9 @@ fun first_match (v : valu) (plst : pattern list) : (string * valu) list option =
   SOME (first_answer (fn x => match (v,x)) plst)
   handle NoAnswer => NONE
 
-fun typecheck_patterns_ (tylst, plst) =
+exception NoMatch
+              
+fun typecheck_patterns_e (tylst, plst) =
     let 
         fun ptoty (tylst, p) =
             case p
@@ -152,24 +154,24 @@ fun typecheck_patterns_ (tylst, plst) =
                      if s = s1 andalso ty = ptoty (tylst, p1)
                      then Datatype v
                      else ptoty (xs', p)
-                   | [] => raise NoAnswer)            
-        fun tyred (ty1, ty2) =
+                   | [] => raise NoMatch)            
+        fun tyfold (ty1, ty2) =
             case (ty1, ty2)
              of (TupleT tlst1, TupleT tlst2) =>
-                TupleT ((map tyred (ListPair.zipEq (tlst1, tlst2)))
-                        handle UnequalLengths => raise NoAnswer)
+                TupleT ((map tyfold (ListPair.zipEq (tlst1, tlst2)))
+                        handle UnequalLengths => raise NoMatch)
              | (Anything, ty2) => ty2
              | (ty1, Anything) => ty1
              | (ty1, ty2) => if ty1 = ty2 then ty1
-                            else raise NoAnswer
+                            else raise NoMatch
     in
         case plst
-         of [] => raise NoAnswer
-          | x :: xs' => List.foldl tyred
+         of [] => raise NoMatch
+          | x :: xs' => List.foldl tyfold
                                   (ptoty (tylst, x))
                                   (map (fn x => ptoty (tylst, x)) xs')
     end
 
 fun typecheck_patterns (tylst, plst) =
-    SOME (typecheck_patterns_ (tylst, plst))
-    handle NoAnswer => NONE
+    SOME (typecheck_patterns_e (tylst, plst))
+    handle NoMatch => NONE
