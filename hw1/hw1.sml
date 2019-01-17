@@ -1,12 +1,12 @@
 (*Homework 1*)
 
-fun is_older (date_01 : int * int * int, date_02 : int * int * int) =
-  if #1 date_01 < #1 date_02 then true
-  else if #1 date_01 > #1 date_02 then false
-  else if #2 date_01 < #2 date_02 then true
-  else if #2 date_01 > #2 date_02 then false
-  else if #3 date_01 < #3 date_02 then true
-  else false
+fun is_older (d1 : int * int * int, d2 : int * int * int) =
+    if #1d1 = #1d2
+    then
+        if #2d1 = #2d2 then #3d1 < #3d2
+        else #2d1 < #2d2
+    else
+        #1d1 < #1d2
 
 fun number_in_month (date_list : (int * int * int) list, month : int) =
   if null date_list then 0

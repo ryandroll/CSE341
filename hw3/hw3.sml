@@ -140,21 +140,20 @@ exception NoMatch
               
 fun typecheck_patterns_e (tylst, plst) =
     let 
-        fun constoty (tlyst, ConstructorP(s1, p1)) =
-            case tylst
-             of (s, v, ty) :: xs' =>
-                if s = s1 andalso ty = constoty (tylst, p1)
-                then Datatype v
-                else constoty (xs', ConstructorP(s1, p1))
-              | [] => raise NoMatch
-        fun ptoty p =
+        fun ptoty (tylst, p) =
             case p
              of Wildcard => Anything
-              | Variable s => Anything
+              | Variable _ => Anything
               | UnitP => UnitT
-              | ConstP n1 => IntT
-              | TupleP pst => TupleT (map ptoty pst)
-              | ConstructorP(s1, p1) => constoty (tylst, ConstructorP(s1, p1))
+              | ConstP _ => IntT
+              | TupleP pst => TupleT (map (fn x => ptoty (tylst, x)) pst)
+              | ConstructorP(s1, p1) =>
+                (case tylst
+                  of (s, v, ty) :: xs' =>
+                     if s = s1 andalso ty = ptoty (tylst, p1)
+                     then Datatype v
+                     else ptoty (xs', p)
+                   | [] => raise NoMatch)            
         fun tyfold (ty1, ty2) =
             case (ty1, ty2)
              of (TupleT tlst1, TupleT tlst2) =>
@@ -166,9 +165,10 @@ fun typecheck_patterns_e (tylst, plst) =
     in
         case plst
          of [] => raise NoMatch
-          | xs => List.foldl tyfold Anything (map ptoty xs)
+          | xs => List.foldl tyfold Anything (map (fn x => ptoty(tylst, x)) xs)
     end
 
 fun typecheck_patterns (tylst, plst) =
     SOME (typecheck_patterns_e (tylst, plst))
     handle NoMatch => NONE
+
