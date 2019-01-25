@@ -19,7 +19,7 @@
   (cond
     ((< n 0) (error "list-nth-mod: negative number"))
     ((null? xs) (error "list-nth-mod: empty list"))
-    (#t (car (list-tail xs (remainder n (length xs)))))))
+    (else (car (list-tail xs (remainder n (length xs)))))))
 
 ;; Problem 4
  
@@ -74,19 +74,17 @@
                     ((= n l) #f)
                     ((not (pair? (vector-ref vec n))) (aux (+ n 1)))
                     ((equal? v (car (vector-ref vec n))) (vector-ref vec n))
-                    (#t (aux (+ n 1)))))])
+                    (else (aux (+ n 1)))))])
     (aux 0)))
 
 ;; Problem 10
 (define (cached-assoc xs n)
   (letrec ([vec (make-vector n #f)]
-           [pos 0]
-           [sav-vec! (lambda (i v) (vector-set! vec i v))]
-           [sav-pos! (lambda (x) (set! pos (remainder (+ x 1) n)))])
+           [pos 0])
     (lambda (v)
       (cond
         ((vector-assoc v vec) (vector-assoc v vec))
-        ((assoc v xs) (begin (sav-vec! pos (assoc v xs))
-                             (sav-pos! pos)
+        ((assoc v xs) (begin (vector-set! pos (assoc v xs))
+                             (set! pos (remainder (+ pos 1) n))
                              (assoc v xs)))
-        (#t #f)))))
+        (else #f)))))
